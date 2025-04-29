@@ -20,7 +20,7 @@ This is a proof-of-concept (POC) HRMS (Human Resource Management System) backend
 
 ## 📦 Setup Instructions
 
-### 1. Clone the Repository
+### 1. Clone the Repository, set up env, install requirements and run fastAPI
 
 ```bash
 git clone https://github.com/your-username/hrms-poc.git
