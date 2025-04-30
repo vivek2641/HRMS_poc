@@ -1,8 +1,14 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from sql_query import query_db
+from dotenv import load_dotenv
+from chatbot import  ChatBot
+from pydantic import BaseModel
+# from chatbot.ChatBot import generate_response, get_chat_history
 
 app = FastAPI()
 
+chatbot = ChatBot()
+load_dotenv()
 # --- API Endpoints ---
 
 @app.get("/employees")
@@ -27,10 +33,14 @@ def get_birthdays_this_month():
 @app.get("/birthdays/upcoming")
 def get_upcoming_birthdays(days: int = 7):
     query = """
-        SELECT e.*, b.birth_date, b.upcoming_birthday FROM employees e
+        SELECT e.*, b.birth_date 
+        FROM employees e
         JOIN birthdays b ON e.employee_id = b.employee_id
-        WHERE DATE_FORMAT(b.upcoming_birthday, '%m-%d') BETWEEN 
-              DATE_FORMAT(CURDATE(), '%m-%d') AND DATE_FORMAT(DATE_ADD(CURDATE(), INTERVAL %s DAY), '%m-%d')
+        WHERE 
+            DATE_FORMAT(b.birth_date, '%m-%d') BETWEEN 
+                DATE_FORMAT(CURDATE(), '%m-%d') AND 
+                DATE_FORMAT(DATE_ADD(CURDATE(), INTERVAL %s DAY), '%m-%d')
+        ORDER BY DATE_FORMAT(b.birth_date, '%m-%d')
     """
     return query_db(query, (days,))
 
@@ -41,8 +51,13 @@ def get_leave_records(employee_id: int):
 
 @app.get("/employees/department")
 def get_employees_by_department(department: str):
+    if not department.isalpha():  
+        raise HTTPException(status_code=400, detail="Invalid department name")
     query = "SELECT * FROM employees WHERE department = %s"
-    return query_db(query, (department,))
+    try:
+        return query_db(query, (department,))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Database error")
 
 @app.get("/leave/today")
 def get_employees_on_leave_today():
@@ -73,3 +88,27 @@ def get_employees_with_no_leave():
     """
     return query_db(query)
 
+class ChatMessage(BaseModel):
+    employee_id: int
+    message: str
+
+@app.post("/chat/send")
+async def send_chat_message(chat_message: ChatMessage):
+    try:
+        response = chatbot.generate_response(
+        chat_message.employee_id,
+        chat_message.message
+        )
+        return {"response": response}
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    
+@app.get("/chat/history/{employee_id}")
+async def get_chat_history(employee_id: int, limit: int = 10):
+    try:
+        history = ChatBot.get_chat_history(employee_id, limit)
+        return {"history": history}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
