@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import requests
 from typing import Optional, List, Dict, Any
-# from chatbot import chat_with_model
+from chatbot import chat_summary
 # from chatbot.ChatBot import generate_response, get_chat_history
 
 app = FastAPI()
@@ -133,20 +133,38 @@ HRMS_BASE_URL = "http://127.0.0.1:8000"
 
 @app.post("/get-data")
 def get_data(employee_id: str, endpoint_list: List[str]):
-    data = []
+    data = {}
     for endpoint in endpoint_list:
         if endpoint.endswith("/"):
             url = f"{HRMS_BASE_URL}{endpoint}{employee_id}"
         else:
             url = f"{HRMS_BASE_URL}{endpoint}"
 
-    print(url,type(url))
+    # print(url,type(url))
     response = requests.get(url)
-    print(response)
-    data.append(response.json())
-    print(data)
+    # print(response)
     if response.status_code == 200:
-        return response.json()
+        data[employee_id] = response.json()
     else:
         print(f"Request failed with status code: {response.status_code}")
         return None
+    # print(data)
+
+    return data
+
+
+user = "casual leave balance for employee 102"
+data = 	{
+  "102": {
+    "first_name": "James",
+    "last_name": "Wilson",
+    "Casual": 2,
+    "Sick": 5,
+    "Unpaid": 5,
+    "Adjustment": 7,
+    "total": 19
+  }
+}
+
+final_response = chat_summary(user,data)
+print(final_response)
