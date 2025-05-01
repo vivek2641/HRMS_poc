@@ -1,9 +1,22 @@
-import requests
+from chatbot_openai import get_endpoint_response,summarize_user_query
+from main import get_data
 
-url = "http://127.0.0.1:8000/birthdays/upcoming"
-response = requests.get(url)
 
-# Print the HTTP status code and response content
-print("Status Code:", response.status_code)
-print("Response JSON:", response.json())  # or response.text if it's not JSON
-print("Response:", response)
+while True:
+    employee_id = str(input("Employee ID: "))
+    while True:
+        user_message = input("You: ")
+        if user_message.lower() in ["exit", "quit"]:
+            print("Thank you!")
+            break  
+        else:
+            endpoint_list = get_endpoint_response(user_message)
+            if endpoint_list == []:
+                print("Bot: I'm sorry, I don't understand your query.")
+            else:
+                data = get_data(employee_id, endpoint_list)
+
+                final_response = summarize_user_query(user_message, data)
+                print("Bot:", final_response)
+                   
+    break

@@ -1,13 +1,9 @@
 from sql_query import query_db
 from dotenv import load_dotenv
-from pydantic import BaseModel
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
 import requests
-from typing import Optional, List, Dict, Any
-from chatbot import chat_summary
-# from chatbot.ChatBot import generate_response, get_chat_history
+from typing import List
 
 app = FastAPI()
 
@@ -26,12 +22,16 @@ load_dotenv()
 
 @app.get("/employees")
 def get_all_employees():
-    query = "SELECT * FROM employees"
+    query = """SELECT * FROM employees"""
     return query_db(query)
 
 @app.get("/employee/{employee_id}")
 def get_employee_by_id(employee_id: int):
-    query = "SELECT * FROM employees WHERE employee_id = %s"
+    query = """SELECT ep.*, b.* , l.*, lb.*  FROM employees as ep
+               left join birthdays as b on b.employee_id = ep.employee_id
+               left join leaves as l on l.employee_id = ep.employee_id
+               left join leave_balance as lb on lb.employee_id = ep.employee_id
+               WHERE ep.employee_id = %s"""
     return query_db(query, (employee_id,))
 
 @app.get("/birthdays/this-month")
@@ -62,15 +62,13 @@ def get_leave_records(employee_id: int):
     query = "SELECT * FROM leaves WHERE employee_id = %s"
     return query_db(query, (employee_id,))
 
-@app.get("/employees/department")
-def get_employees_by_department(department: str):
-    if not department.isalpha():  
-        raise HTTPException(status_code=400, detail="Invalid department name")
-    query = "SELECT * FROM employees WHERE department = %s"
-    try:
-        return query_db(query, (department,))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail="Database error")
+@app.get("/employees/department/{employee_id}")
+def get_department_by_employee_id(employee_id: str):
+    query = """SELECT employee_id,
+                      first_name, 
+                      last_name, 
+                      department FROM employees WHERE employee_id = %s"""
+    return query_db(query, (employee_id,))
 
 @app.get("/leave/today")
 def get_employees_on_leave_today():
@@ -121,50 +119,26 @@ def get_leave_balance(employee_id: int):
         raise HTTPException(status_code=404, detail="Employee not found")
     return result[0]
 
-# user_input = str(input("Enter your query: "))
-# endpoint_list = chat_with_model(user_input)
-
-
-
-# #---------------------------------------------
-
+# Base URL for HRMS API
 HRMS_BASE_URL = "http://127.0.0.1:8000"
-
 
 @app.post("/get-data")
 def get_data(employee_id: str, endpoint_list: List[str]):
-    data = {}
+    data = []
     for endpoint in endpoint_list:
         if endpoint.endswith("/"):
             url = f"{HRMS_BASE_URL}{endpoint}{employee_id}"
         else:
             url = f"{HRMS_BASE_URL}{endpoint}"
-
-    # print(url,type(url))
-    response = requests.get(url)
-    # print(response)
-    if response.status_code == 200:
-        data[employee_id] = response.json()
-    else:
-        print(f"Request failed with status code: {response.status_code}")
-        return None
-    # print(data)
-
+        
+        try:
+            response = requests.get(url)
+            if response.status_code == 200:
+                data.append(response.json())
+            else:
+                print(f"Request to {url} failed with status code: {response.status_code}")
+        except requests.exceptions.RequestException as e:
+            print(f"Error fetching {url}: {e}")
+    
     return data
 
-
-user = "casual leave balance for employee 102"
-data = 	{
-  "102": {
-    "first_name": "James",
-    "last_name": "Wilson",
-    "Casual": 2,
-    "Sick": 5,
-    "Unpaid": 5,
-    "Adjustment": 7,
-    "total": 19
-  }
-}
-
-final_response = chat_summary(user,data)
-print(final_response)
