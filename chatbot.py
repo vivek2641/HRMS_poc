@@ -1,78 +1,63 @@
-from fastapi import HTTPException
-from global_config import OPENAI_API_KEY
-import mysql.connector
-from global_config import MYSQL_PASSWORD, MYSQL_DATABASE, MYSQL_HOST, MYSQL_USER
-from datetime import datetime
-import openai
+from langchain_groq import ChatGroq
+from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
+from dotenv import load_dotenv
+from langchain.chains import LLMChain
+from langchain.prompts import PromptTemplate
 
-class ChatBot:
-    def init(self):
-        self.openai_client = openai.OpenAI(api_key=OPENAI_API_KEY)
-        self.system_prompt = """
-        You are a helpful HR assistant for a company. Your role is to assist employees with their HR-related questions.
-        Be polite, professional, and concise in your responses. If you don't know an answer, direct the employee to
-        contact the HR department directly.
-        """
-    def get_db_connection(self):
-        return mysql.connector.connect(
-            host=MYSQL_HOST,
-            user=MYSQL_USER,
-            password=MYSQL_PASSWORD,
-            database=MYSQL_DATABASE
-        )
+load_dotenv()
 
-    def get_chat_history(self, employee_id: int, limit: int = 10):
-        conn = self.get_db_connection()
-        cursor = conn.cursor(dictionary=True)
-        query = """
-            SELECT * FROM chat_history 
-            WHERE employee_id = %s 
-            ORDER BY timestamp DESC 
-            LIMIT %s
-        """
-        cursor.execute(query, (employee_id, limit))
-        results = cursor.fetchall()
-        conn.close()
-        return results
+import os
 
-    def save_message(self, employee_id: int, message: str, is_bot: bool):
-        conn = self.get_db_connection()
-        cursor = conn.cursor()
-        query = """
-            INSERT INTO chat_history 
-            (employee_id, message, is_bot, timestamp) 
-            VALUES (%s, %s, %s, %s)
-        """
-        cursor.execute(query, (employee_id, message, is_bot, datetime.now()))
-        conn.commit()
-        conn.close()
+# Set Groq API Key
+GROQ_API_KEY = os.environ["GROQ_API_KEY"]
 
-    def generate_response(self, employee_id: int, user_message: str):
-        # Get recent chat history for context
-        history = self.get_chat_history(employee_id)
-        messages = [{"role": "system", "content": self.system_prompt}]
+# Define the prompt template with conversation history
+prompt_template = PromptTemplate(
+    input_variables=["human_input"],
+    template="""
+You are an AI assistant for HRMS. 
+Your job is to analyze the user's query and determine which API endpoints would provide the requested information.
+
+Available endpoints:
+1. /employees - Get all employees
+2. /employee/ - Get specific employee by ID
+3. /birthdays/this-month - Get employees with birthdays this month
+4. /birthdays/upcoming - Get upcoming birthdays (default: next 7 days, customizable)
+5. /leave/employee/ - Get leave records for an employee
+6. /employees/department - Get employees by department
+7. /leave/today - Get employees on leave today
+8. /employees/status-count - Get count of active/inactive employees
+9. /employees/recent-joiners - Get employees hired in last 30 days
+10. /leave/no-leave-this-year - Get employees who haven't taken leave this year
+11. /leave-balances/ - Get leave balance for an employee
+
+Your response should ONLY be a list of endpoint paths that would satisfy the user's query.
+Example responses:
+- For "who's on leave today": ["/leave/today"]
+- For "employees in marketing department": ["/employees/department"]
+- For "show me my leave balance": ["/leave-balances/"]
+
+Current query: {human_input}
+"""
+)
+
+# Initialize Groq model
+llm = ChatGroq(model_name="deepseek-r1-distill-llama-70b", api_key=GROQ_API_KEY)
+
+# Create the LLM Chain
+CHATBOT_CHAIN = LLMChain(llm=llm, prompt=prompt_template, verbose=True)
+
+# Function to chat with the model and maintain session in Redis
+def chat_with_model(user_input):
+    """Processes user input, retrieves session history, gets AI response, and stores both in Redis."""
+    ai_response = CHATBOT_CHAIN.run({"human_input": user_input})
+    return ai_response 
         
-        # Add history to messages (in chronological order)
-        for msg in reversed(history):
-            role = "assistant" if msg['is_bot'] else "user"
-            messages.append({"role": role, "content": msg['message']})
-        
-        # Add current message
-        messages.append({"role": "user", "content": user_message})
-        
-        try:
-            response = self.openai_client.chat.completions.create(
-                model="gpt-3.5-turbo",
-                messages=messages,
-                temperature=0.7,
-                max_tokens=200
-            )
-            bot_response = response.choices[0].message.content
-            
-            # Save both messages to history
-            self.save_message(employee_id, user_message, False)
-            self.save_message(employee_id, bot_response, True)
-            
-            return bot_response
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=str(e))
+
+while True:
+    user_message = input("You: ")
+    if user_message.lower() in ["exit", "quit"]:
+        print("thank you")  
+        break
+    response = chat_with_model(user_message)
+    print("Bot:", response)

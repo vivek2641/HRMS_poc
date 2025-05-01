@@ -3,6 +3,8 @@ mysql-connector-python==9.3.0
 uvicorn==0.34.2
 python-dotenv
 groq
-requests
+langchain_groq
+langchain_core
+langchain
 requests
 openai==1.12.0

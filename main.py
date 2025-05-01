@@ -1,13 +1,26 @@
-from fastapi import FastAPI, HTTPException
 from sql_query import query_db
 from dotenv import load_dotenv
-from chatbot import  ChatBot
 from pydantic import BaseModel
+from fastapi import FastAPI, HTTPException, Depends
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+import requests
+from typing import Optional, List, Dict, Any
+# from chatbot import chat_with_model
 # from chatbot.ChatBot import generate_response, get_chat_history
 
 app = FastAPI()
 
-chatbot = ChatBot()
+origins = ["*"]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 load_dotenv()
 # --- API Endpoints ---
 
@@ -88,27 +101,52 @@ def get_employees_with_no_leave():
     """
     return query_db(query)
 
-class ChatMessage(BaseModel):
-    employee_id: int
-    message: str
+@app.get("/leave-balances/{employee_id}")
+def get_leave_balance(employee_id: int):
+    query = """
+        SELECT 
+            e.first_name,
+            e.last_name,
+            lb.Casual,
+            lb.Sick, 
+            lb.Unpaid, 
+            lb.Adjustment, 
+            lb.total 
+        FROM leave_balance lb
+        JOIN employees e ON lb.employee_id = e.employee_id
+        WHERE lb.employee_id = %s
+    """
+    result = query_db(query, (employee_id,))
+    if not result:
+        raise HTTPException(status_code=404, detail="Employee not found")
+    return result[0]
 
-@app.post("/chat/send")
-async def send_chat_message(chat_message: ChatMessage):
-    try:
-        response = chatbot.generate_response(
-        chat_message.employee_id,
-        chat_message.message
-        )
-        return {"response": response}
-    except HTTPException as e:
-        raise e
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-    
-@app.get("/chat/history/{employee_id}")
-async def get_chat_history(employee_id: int, limit: int = 10):
-    try:
-        history = ChatBot.get_chat_history(employee_id, limit)
-        return {"history": history}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+# user_input = str(input("Enter your query: "))
+# endpoint_list = chat_with_model(user_input)
+
+
+
+# #---------------------------------------------
+
+HRMS_BASE_URL = "http://127.0.0.1:8000"
+
+
+@app.post("/get-data")
+def get_data(employee_id: str, endpoint_list: List[str]):
+    data = []
+    for endpoint in endpoint_list:
+        if endpoint.endswith("/"):
+            url = f"{HRMS_BASE_URL}{endpoint}{employee_id}"
+        else:
+            url = f"{HRMS_BASE_URL}{endpoint}"
+
+    print(url,type(url))
+    response = requests.get(url)
+    print(response)
+    data.append(response.json())
+    print(data)
+    if response.status_code == 200:
+        return response.json()
+    else:
+        print(f"Request failed with status code: {response.status_code}")
+        return None
