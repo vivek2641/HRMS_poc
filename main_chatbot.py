@@ -4,7 +4,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import requests
 from typing import List
-
+from chatbot_openai import get_endpoint_response,summarize_user_query
 app = FastAPI()
 
 origins = ["*"]
@@ -142,3 +142,42 @@ def get_data(employee_id: str, endpoint_list: List[str]):
     
     return data
 
+# Base URL for HRMS API
+HRMS_BASE_URL = "http://127.0.0.1:8000"  # This should probably be your own base URL
+
+# ... [keep all your existing endpoints] ...
+
+@app.post("/chatbot/query")
+def handle_chatbot_query(employee_id: str, user_message: str):
+    """
+    Handle chatbot queries by:
+    1. Determining which endpoints to call based on the user message
+    2. Fetching data from those endpoints
+    3. Generating a summarized response using OpenAI
+    """
+    endpoint_list = get_endpoint_response(user_message)
+    
+    if not endpoint_list:
+        return {"response": "I'm sorry, I don't understand your query."}
+    
+    data = []
+    for endpoint in endpoint_list:
+        if endpoint.endswith("/"):
+            url = f"{HRMS_BASE_URL}{endpoint}{employee_id}"
+        else:
+            url = f"{HRMS_BASE_URL}{endpoint}"
+        
+        try:
+            response = requests.get(url)
+            if response.status_code == 200:
+                data.append(response.json())
+            else:
+                print(f"Request to {url} failed with status code: {response.status_code}")
+        except requests.exceptions.RequestException as e:
+            print(f"Error fetching {url}: {e}")
+    
+    if not data:
+        return {"response": "I couldn't retrieve any data for your query."}
+    
+    final_response = summarize_user_query(user_message, data)
+    return {"response": final_response}

@@ -118,6 +118,8 @@ Instructions:
 - Respond with a list of endpoints.
 - Do NOT include explanation, reasoning, or any extra text.
 - Ensure each matching endpoint is present only once.
+- If user need there own details than you can return the /employee/ endpoint
+- If need for all the depoyee details than you acn use /employees only 
 
 Example responses:
 - "who's on leave today": ["/leave/today"]
@@ -146,7 +148,7 @@ def summarize_user_query(user_query: str, data: list[dict]) -> str:
 You are an AI assistant for an HRMS system.
 
 Instructions:
-- Read the user's query and give Response.
+- The data provided is directly fetched from the database using a query, and is accurate. Your task is only to rephrase this data into a plain, human-readable response. Do not modify, filter, or exclude any entries.- Read the user's query and give Response.
 - Respond in a formal, grammatically correct sentence.
 - Do not return JSON.
 - Do not explain your reasoning.
@@ -154,13 +156,14 @@ Instructions:
 - Include leave types like Casual, Sick, Unpaid, Adjustment in the output.
 - If you found upcoming and birhday and any numarical number than take as upcoming days number and return all name of the data you got.
 - first check the user query and use the data for generate the answer. Quertions may depended on all data or signle data.
+- You must read all the data and respond according to the user's question. Identify relevant information from the data and return answers based on the user's query.
 
 User Query:
 {user_query}
-
+\n\n
 Data:
 {data}
-
+\n\n
 Provide a natural language response based only on the above data.
 """
 
@@ -168,7 +171,7 @@ Provide a natural language response based only on the above data.
         response = client.chat.completions.create(
             model=MODEL,
             messages=[{"role": "user", "content": prompt}],
-            temperature=0.2
+            temperature=0.0
         )
         return response.choices[0].message.content.strip()
     except Exception as e:
