@@ -11,11 +11,12 @@ while True:
             break  
         else:
             endpoint_list = get_endpoint_response(user_message)
+            print(endpoint_list)
             if endpoint_list == []:
                 print("Bot: I'm sorry, I don't understand your query.")
             else:
                 data = get_data(employee_id, endpoint_list)
-
+                print(data)
                 final_response = summarize_user_query(user_message, data)
                 print("Bot:", final_response)
                    
