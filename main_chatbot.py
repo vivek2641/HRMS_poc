@@ -142,10 +142,33 @@ def get_data(employee_id: str, endpoint_list: List[str]):
     
     return data
 
-# Base URL for HRMS API
-HRMS_BASE_URL = "http://127.0.0.1:8000"  # This should probably be your own base URL
+#--------------------------------------------------------------------
+# data save in csv 
 
-# ... [keep all your existing endpoints] ...
+import csv
+import os
+
+# Add this at the top with other imports
+CSV_FILE_PATH = "chatbot_logs.csv"
+
+def save_to_csv(employee_id: str, user_query: str, chatbot_response: str, endpoint_list: List[str],url:str):
+    """Save the conversation to a CSV file"""
+    # Create file with headers if it doesn't exist
+    file_exists = os.path.isfile(CSV_FILE_PATH)
+    
+    with open(CSV_FILE_PATH, mode='a', newline='', encoding='utf-8') as file:
+        writer = csv.writer(file)
+        
+        if not file_exists:
+            writer.writerow(["employee_id", "user_query", "chatbot_response","endpoint_list","url"])
+            
+        writer.writerow([
+            employee_id,
+            user_query,
+            chatbot_response,
+            endpoint_list,
+            url
+        ])
 
 @app.post("/chatbot/query")
 def handle_chatbot_query(employee_id: str, user_message: str):
@@ -154,11 +177,14 @@ def handle_chatbot_query(employee_id: str, user_message: str):
     1. Determining which endpoints to call based on the user message
     2. Fetching data from those endpoints
     3. Generating a summarized response using OpenAI
+    4. Saving the query and response to a CSV file
     """
     endpoint_list = get_endpoint_response(user_message)
     
     if not endpoint_list:
-        return {"response": "I'm sorry, I don't understand your query."}
+        response_text = "I'm sorry, I don't understand your query."
+        save_to_csv(employee_id, user_message, response_text)
+        return {"response": response_text}
     
     data = []
     for endpoint in endpoint_list:
@@ -177,7 +203,10 @@ def handle_chatbot_query(employee_id: str, user_message: str):
             print(f"Error fetching {url}: {e}")
     
     if not data:
-        return {"response": "I couldn't retrieve any data for your query."}
+        response_text = "I couldn't retrieve any data for your query."
+        save_to_csv(employee_id, user_message, response_text)
+        return {"response": response_text}
     
     final_response = summarize_user_query(user_message, data)
+    save_to_csv(employee_id, user_message, final_response,endpoint_list,url)
     return {"response": final_response}
